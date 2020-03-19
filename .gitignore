@@ -1,0 +1,9 @@
+.ninja_deps
+.ninja_log
+*.ninja
+cmake_install.cmake
+*.app
+*.icns
+*.iconset
+CMakeCache.txt
+CMakeFiles/
