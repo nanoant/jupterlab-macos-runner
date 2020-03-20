@@ -117,18 +117,21 @@
 - (void)webView:(WKWebView*)webView
     didFailNavigation:(WKNavigation*)navigation
             withError:(NSError*)error {
-  NSLog(@"Navigation %@ failed: %@", navigation, error);
+  NSLog(@"Navigation %@ failed: %@", navigation, error.localizedDescription);
   NSAlert* alert = [[NSAlert alloc] init];
-  alert.messageText = [NSString
-      stringWithFormat:@"Failed to navigate `%@': %@", navigation, error, nil];
+  alert.messageText =
+      [NSString stringWithFormat:@"Failed to navigate `%@': %@", navigation,
+                                 error.localizedDescription, nil];
   [alert runModal];
 }
 
 - (void)webView:(WKWebView*)webView
     didFailProvisionalNavigation:(WKNavigation*)navigation
                        withError:(NSError*)error {
-  if (error.domain == NSURLErrorDomain && error.code == -1004 &&
+  if ([error.domain isEqualToString:NSURLErrorDomain] && error.code == -1004 &&
       loadAttempts > 0) {
+    NSLog(@"Retrying (%d attempts) failed provisional navigation %@: %@",
+          loadAttempts, navigation, error.localizedDescription);
     loadAttempts--;
     [self performSelector:@selector(loadJupyterPage)
                withObject:nil
@@ -136,10 +139,12 @@
     return;
   }
 
-  // NSLog(@"Provisional navigation %@ failed: %@", navigation, error);
+  NSLog(@"Provisional navigation %@ failed: %@", navigation,
+        error.localizedDescription);
   NSAlert* alert = [[NSAlert alloc] init];
-  alert.messageText = [NSString
-      stringWithFormat:@"Failed to navigate `%@': %@", navigation, error, nil];
+  alert.messageText =
+      [NSString stringWithFormat:@"Failed to navigate `%@': %@", navigation,
+                                 error.localizedDescription, nil];
   [alert runModal];
   [self loadJupyterPage];
 }
