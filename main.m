@@ -10,6 +10,7 @@
   WKWebViewConfiguration* configuration;
   WKUserContentController* contentController;
   NSTask* jupyterTask;
+  NSString* host;
   int port;
   int loadAttempts;
   NSString* token;
@@ -52,12 +53,13 @@
       [defaults stringForKey:@"CommandPath"] ?: @"jupyter-lab";
   NSString* notebookPath =
       [defaults stringForKey:@"NotebookPath"] ?: @"~/Documents/Notebooks";
+  host = [defaults stringForKey:@"Host"] ?: @"127.0.0.1";
   port = [defaults integerForKey:@"Port"] ?: 11011;
   token = [defaults stringForKey:@"Token"] ?: @"deadbeefb00b";
   NSTask* task = [NSTask new];
   task.executableURL = [NSURL fileURLWithPath:commandPath];
   task.arguments = [NSArray
-      arrayWithObjects:@"--no-browser", @"--ip=127.0.0.1",
+      arrayWithObjects:@"--no-browser", [@"--ip=" stringByAppendingString:host],
                        [@"--port=" stringByAppendingFormat:@"%d", port, nil],
                        [@"--notebook-dir="
                            stringByAppendingString:notebookPath],
@@ -90,7 +92,7 @@
 
 - (void)loadJupyterPage {
   NSString* address = [NSString
-      stringWithFormat:@"http://127.0.0.1:%d/?token=%@", port, token, nil];
+      stringWithFormat:@"http://%@:%d/?token=%@", host, port, token, nil];
   // NSLog(@"Opening: %@", address);
   NSURLRequest* request =
       [NSURLRequest requestWithURL:[NSURL URLWithString:address]];
