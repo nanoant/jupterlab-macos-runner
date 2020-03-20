@@ -18,6 +18,17 @@
 }
 @end
 
+@interface NSConcreteTask : NSTask {
+}
+// https://github.com/facebook/xctool/commit/e61f436
+//
+// When YES (default), a new progress group is created for the child (via
+// POSIX_SPAWN_SETPGROUP to posix_spawnattr_setflags).  If YES, then the child
+// will continue running even if the parent is killed or interrupted.
+//
+- (void)setStartsNewProcessGroup:(BOOL)startsNewProcessGroup;
+@end
+
 @implementation AppDelegate : NSObject
 
 - (id)init {
@@ -68,6 +79,12 @@
                        [@"--NotebookApp.token=" stringByAppendingString:token],
                        nil];
   @try {
+    if ([task respondsToSelector:@selector(setStartsNewProcessGroup:)]) {
+      // Ensure process dies when this application dies.
+      [(NSConcreteTask*)task setStartsNewProcessGroup:NO];
+    } else {
+      NSLog(@"Task %@ is not NSConcreteTask and may become stray.", task);
+    }
     [task launch];
   } @catch (NSException* exception) {
     NSAlert* alert = [[NSAlert alloc] init];
@@ -187,9 +204,10 @@
 }
 
 - (void)applicationWillTerminate:(NSNotification*)notification {
-  [jupyterTask interrupt];
-  [NSThread sleepForTimeInterval:0.5];
-  [jupyterTask interrupt]; // needs twice to skip confirmation
+  // NOTE: [jupyterTask terminate]; is not reliable with conjunction with
+  // [(NSConcreteTask*)task setStartsNewProcessGroup:NO];
+  // Using POSIX way instead
+  kill(jupyterTask.processIdentifier, SIGTERM);
   [jupyterTask waitUntilExit];
 }
 
