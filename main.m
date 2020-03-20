@@ -156,6 +156,32 @@
   loadAttempts = 0;
 }
 
+- (void)webView:(WKWebView*)webView
+    decidePolicyForNavigationAction:(WKNavigationAction*)navigationAction
+                    decisionHandler:
+                        (void (^)(WKNavigationActionPolicy))decisionHandler {
+  NSURL* url = navigationAction.request.URL;
+  bool isLocal = [url.scheme isEqualToString:@"http"] &&
+                 [url.host isEqualToString:host] && url.port.intValue == port;
+  if (isLocal || [url.scheme isEqualToString:@"https"]) {
+    decisionHandler(WKNavigationActionPolicyAllow);
+  } else {
+    switch (navigationAction.navigationType) {
+    case WKNavigationTypeLinkActivated:
+      NSLog(@"Opening navigation action %ld in regular browser instead for: %@",
+            navigationAction.navigationType, url);
+      [NSWorkspace.sharedWorkspace openURL:url];
+      decisionHandler(WKNavigationActionPolicyCancel);
+      break;
+    default:
+      NSLog(@"Disallowed navigation action %ld to: %@",
+            navigationAction.navigationType, url);
+      decisionHandler(WKNavigationActionPolicyCancel);
+      break;
+    }
+  }
+}
+
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender {
   return YES;
 }
