@@ -13,6 +13,7 @@
   NSString* host;
   int port;
   int loadAttempts;
+  double loadDelay;
   NSString* token;
 }
 @end
@@ -56,6 +57,7 @@
   host = [defaults stringForKey:@"Host"] ?: @"127.0.0.1";
   port = [defaults integerForKey:@"Port"] ?: 11011;
   token = [defaults stringForKey:@"Token"] ?: @"deadbeefb00b";
+  loadDelay = [defaults doubleForKey:@"LoadDelay"] ?: 0.5;
   NSTask* task = [NSTask new];
   task.executableURL = [NSURL fileURLWithPath:commandPath];
   task.arguments = [NSArray
@@ -96,7 +98,6 @@
   // NSLog(@"Opening: %@", address);
   NSURLRequest* request =
       [NSURLRequest requestWithURL:[NSURL URLWithString:address]];
-  // [NSThread sleepForTimeInterval:0.5];
   [webView loadRequest:request];
 }
 
@@ -110,7 +111,7 @@
 
   [self performSelector:@selector(loadJupyterPage)
              withObject:nil
-             afterDelay:0.5];
+             afterDelay:loadDelay];
 }
 
 - (void)webView:(WKWebView*)webView
@@ -131,7 +132,8 @@
     loadAttempts--;
     [self performSelector:@selector(loadJupyterPage)
                withObject:nil
-               afterDelay:0.5];
+               afterDelay:loadDelay];
+    return;
   }
 
   // NSLog(@"Provisional navigation %@ failed: %@", navigation, error);
