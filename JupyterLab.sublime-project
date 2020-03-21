@@ -1,0 +1,19 @@
+{
+	"build_systems":
+	[
+		{
+			"name": "CMake - Ninja",
+			"shell_cmd": "if [ ! -d '${project_path}/build' ]; then cmake -GNinja -S'${project_path}' -B'${project_path}/build'; fi && cd '${project_path}/build' && ninja && open '${project_path}/build/JupyterLab.app'",
+			"file_regex": "^(..[^:\n]*):([0-9]+):?([0-9]+)?:? (.*)$",
+			"working_dir": "${project_path}",
+			"path": "/opt/arch/bin:$PATH",
+			"keyfiles": "CMakeLists.txt"
+		}
+	],
+	"folders":
+	[
+		{
+			"path": "."
+		}
+	]
+}

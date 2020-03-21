@@ -1,3 +1,4 @@
+*.sublime-workspace
 .ninja_deps
 .ninja_log
 *.ninja
