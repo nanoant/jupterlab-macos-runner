@@ -3,7 +3,11 @@ JupyterLab macOS Runner
 
 [lab]: https://jupyterlab.readthedocs.io/en/stable/
 
-Standalone app that runs `jupyter-lab` command in background and opens WebKit window with [*JupyterLab*][lab].
+This is a standalone application that runs `jupyter-lab` command in the background and opens a WebKit window with [*JupyterLab*][lab] interface. When the application is closed, background `jupyter-lab` process is terminated with `SIGTERM`.
+
+It was created to make JupyterLab work more convenient on *macOS*, without the need to fiddle with the command line and making it distinctive from the regular browser.
+
+NOTE: At the moment it does not detect if there are some unsaved notebooks upon application quit.
 
 <img src="Screenshot.png" width="640" height="436" alt="Screenshot">
 
@@ -11,22 +15,28 @@ Standalone app that runs `jupyter-lab` command in background and opens WebKit wi
 
 Accessible via `defaults read/write com.nanoant.webapp.JupyterLab`
 
-Following settings (showing default values):
+This application has no dedicated settings UI. All settings needs to be adjusted using `defaults`. Following settings are exposed, showing default values:
 ~~~bash
 defaults write com.nanoant.webapp.JupyterLab CommandPath "jupyter-lab"
 defaults write com.nanoant.webapp.JupyterLab NotebookPath "~/Documents/Notebooks"
+defaults write com.nanoant.webapp.JupyterLab Host "127.0.0.1"
 defaults write com.nanoant.webapp.JupyterLab Port -int 11011
 defaults write com.nanoant.webapp.JupyterLab Token "deadbeefb00b"
 ~~~
 
-Translate into following invocation:
+These settings are translated into following `jupyter-lab` invocation:
 ~~~bash
-> $CommandPath --no-browser --ip=127.0.0.1 --port=$Port --notebook-dir=$NotebookPath --NotebookApp.token=$Token
+> $CommandPath \
+    --no-browser \
+    --ip=$Host \
+    --port=$Port \
+    --notebook-dir=$NotebookPath \
+    --NotebookApp.token=$Token
 ~~~
 
 ### Build
 
-Use CMake to build it.
+Use CMake with Xcode or Command Line Tools installed to build it.
 
 ### License
 
@@ -34,4 +44,4 @@ Licensed under [MIT License](LICENSE).
 
 ### Disclaimers
 
-Icon borrowed from [JupterLab][lab] project.
+Icon borrowed and revamped from [JupterLab][lab] project.
