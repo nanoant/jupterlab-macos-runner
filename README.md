@@ -5,6 +5,8 @@ JupyterLab macOS Runner
 
 Standalone app that runs `jupyter-lab` command in background and opens WebKit window with [*JupyterLab*][lab].
 
+<img src="Screenshot.png" width="640" height="436" alt="Screenshot">
+
 ### Configuration
 
 Accessible via `defaults read/write com.nanoant.webapp.JupyterLab`
