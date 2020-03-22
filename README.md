@@ -17,10 +17,10 @@ Accessible via `defaults read/write com.nanoant.webapp.JupyterLab`
 
 This application has no dedicated settings UI. All settings needs to be adjusted using `defaults`. Following settings are exposed, showing default values:
 ~~~bash
-defaults write com.nanoant.webapp.JupyterLab CommandPath "jupyter-lab"
-defaults write com.nanoant.webapp.JupyterLab NotebookPath "~/Documents/Notebooks"
-defaults write com.nanoant.webapp.JupyterLab Host "127.0.0.1"
-defaults write com.nanoant.webapp.JupyterLab Port -int 11011
+defaults write com.nanoant.webapp.JupyterLab CommandPath  ~/miniconda3/bin/jupyter-lab
+defaults write com.nanoant.webapp.JupyterLab NotebookPath ~/Documents/Notebooks
+defaults write com.nanoant.webapp.JupyterLab Host "127.0.0.1" # local host address
+defaults write com.nanoant.webapp.JupyterLab Port -int 0      # next available port
 defaults write com.nanoant.webapp.JupyterLab Token "deadbeefb00b"
 ~~~
 
