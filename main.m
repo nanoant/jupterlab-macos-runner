@@ -3,6 +3,9 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
 @interface AppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate> {
   NSWindow* window;
   WKWebView* webView;
@@ -49,19 +52,58 @@
     webView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 0, 0) configuration:configuration];
     webView.navigationDelegate = self;
     window.contentView = webView;
-    loadAttempts = 5;
   }
   return self;
 }
 
+// https://gist.github.com/kimar/5916647
+- (int)availablePort {
+  struct sockaddr_in addr;
+  socklen_t len = sizeof(addr);
+  addr.sin_port = 0;
+  inet_aton("0.0.0.0", &addr.sin_addr);
+  int sock = socket(AF_INET, SOCK_STREAM, 0);
+  if (sock < 0) {
+    NSLog(@"Fatal error: socket(...) failed");
+    return 0;
+  }
+  if (bind(sock, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+    NSLog(@"Fatal error: bind(...) failed");
+    close(sock);
+    return 0;
+  }
+  if (getsockname(sock, (struct sockaddr*)&addr, &len) != 0) {
+    NSLog(@"Fatal error: getsockname(...) failed");
+    close(sock);
+    return 0;
+  }
+  close(sock);
+  NSLog(@"Using free port: %d", addr.sin_port);
+  return addr.sin_port;
+}
+
 - (NSTask*)newJupyterCommandTask {
   NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+
   NSString* commandPath = [defaults stringForKey:@"CommandPath"] ?: @"jupyter-lab";
   NSString* notebookPath = [defaults stringForKey:@"NotebookPath"] ?: @"~/Documents/Notebooks";
+
   host = [defaults stringForKey:@"Host"] ?: @"127.0.0.1";
-  port = [defaults integerForKey:@"Port"] ?: 11011;
+  port = [defaults integerForKey:@"Port"] ?: [self availablePort];
   token = [defaults stringForKey:@"Token"] ?: @"deadbeefb00b";
   loadDelay = [defaults doubleForKey:@"LoadDelay"] ?: 0.5;
+  loadAttempts = [defaults integerForKey:@"LoadAttempts"] ?: 5;
+
+  if (port <= 0) {
+    NSAlert* alert = [[NSAlert alloc] init];
+    alert.messageText = [NSString stringWithFormat:@"Not free port found. Adjust Port setting.", nil];
+    [alert beginSheetModalForWindow:window
+                  completionHandler:^(NSModalResponse returnCode) {
+                    [window close];
+                  }];
+    return nil;
+  }
+
   NSTask* task = [NSTask new];
   task.executableURL = [NSURL fileURLWithPath:commandPath];
   task.arguments = [NSArray arrayWithObjects:@"--no-browser", [@"--ip=" stringByAppendingString:host],
@@ -75,12 +117,17 @@
     } else {
       NSLog(@"Task %@ is not NSConcreteTask and may become stray.", task);
     }
+    // TESTING: Uncomment line below to simulate failed server start.
+    // return task;
     [task launch];
   } @catch (NSException* exception) {
     NSAlert* alert = [[NSAlert alloc] init];
     alert.messageText = [NSString stringWithFormat:@"Cannot run command `%@': %@\nAdjust CommandPath setting.",
                                                    commandPath, exception.reason, nil];
-    [alert runModal];
+    [alert beginSheetModalForWindow:window
+                  completionHandler:^(NSModalResponse returnCode) {
+                    [window close];
+                  }];
     return nil;
   }
 
@@ -88,7 +135,10 @@
     NSAlert* alert = [[NSAlert alloc] init];
     alert.messageText =
         [NSString stringWithFormat:@"Command `%@' is not running. Adjust CommandPath setting.", commandPath, nil];
-    [alert runModal];
+    [alert beginSheetModalForWindow:window
+                  completionHandler:^(NSModalResponse returnCode) {
+                    [window close];
+                  }];
     return nil;
   }
 
@@ -106,11 +156,18 @@
 // WKNavigationDelegate
 
 - (void)webView:(WKWebView*)webView didFailNavigation:(WKNavigation*)navigation withError:(NSError*)error {
-  NSLog(@"Navigation %@ failed: %@", navigation, error.localizedDescription);
+  NSString* address = error.userInfo[NSURLErrorFailingURLStringErrorKey] ?: @"?";
+  address = [address stringByReplacingOccurrencesOfString:token withString:@"..."];
+
+  NSLog(@"Navigation to `%@' failed: %@", address, error.localizedDescription);
   NSAlert* alert = [[NSAlert alloc] init];
-  alert.messageText =
-      [NSString stringWithFormat:@"Failed to navigate `%@': %@", navigation, error.localizedDescription, nil];
-  [alert runModal];
+  alert.messageText = @"Page open failed";
+  alert.informativeText =
+      [NSString stringWithFormat:@"Cannot open address: %@\n%@", address, error.localizedDescription, nil];
+  alert.alertStyle = NSAlertStyleCritical;
+  [alert beginSheetModalForWindow:window
+                completionHandler:^(NSModalResponse returnCode){
+                }];
 }
 
 - (void)webView:(WKWebView*)webView didFailProvisionalNavigation:(WKNavigation*)navigation withError:(NSError*)error {
@@ -122,18 +179,37 @@
     return;
   }
 
-  NSLog(@"Provisional navigation %@ failed: %@", navigation, error.localizedDescription);
+  NSString* address = error.userInfo[NSURLErrorFailingURLStringErrorKey] ?: @"?";
+  address = [address stringByReplacingOccurrencesOfString:token withString:@"..."];
+
+  NSLog(@"Provisional navigation to `%@' failed: %@", address, error.localizedDescription);
   NSAlert* alert = [[NSAlert alloc] init];
-  alert.messageText =
-      [NSString stringWithFormat:@"Failed to navigate `%@': %@", navigation, error.localizedDescription, nil];
-  [alert runModal];
-  [self loadJupyterPage];
+  alert.messageText = @"Page open failed";
+  alert.informativeText =
+      [NSString stringWithFormat:@"Cannot open address: %@\n%@", address, error.localizedDescription, nil];
+  alert.alertStyle = NSAlertStyleCritical;
+  [alert addButtonWithTitle:@"Retry"];
+  NSButton* quitButton = [alert addButtonWithTitle:@"Quit"];
+  quitButton.keyEquivalent = @"q";
+  quitButton.keyEquivalentModifierMask = NSEventModifierFlagCommand;
+  [alert beginSheetModalForWindow:window
+                completionHandler:^(NSModalResponse returnCode) {
+                  switch (returnCode) {
+                  case NSAlertFirstButtonReturn:
+                    [self loadJupyterPage];
+                    break;
+                  default:
+                    [window close];
+                    break;
+                  }
+                }];
 }
 
 - (void)webView:(WKWebView*)webView didFinishNavigation:(WKNavigation*)navigation {
-
-  // NSLog(@"Navigation %@ finished.", navigation);
-  loadAttempts = 0;
+  if (loadAttempts > 0) {
+    NSLog(@"Navigation finished.");
+    loadAttempts = 0;
+  }
 }
 
 - (void)webView:(WKWebView*)webView
