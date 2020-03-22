@@ -32,7 +32,7 @@
 
 - (id)init {
   if (self = [super init]) {
-    jupyterTask = [self runJupyterCommandTask];
+    jupyterTask = [self newJupyterCommandTask];
     if (!jupyterTask) {
       [[NSApplication sharedApplication] terminate:self];
       return self;
@@ -54,7 +54,7 @@
   return self;
 }
 
-- (NSTask*)runJupyterCommandTask {
+- (NSTask*)newJupyterCommandTask {
   NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
   NSString* commandPath = [defaults stringForKey:@"CommandPath"] ?: @"jupyter-lab";
   NSString* notebookPath = [defaults stringForKey:@"NotebookPath"] ?: @"~/Documents/Notebooks";
@@ -102,16 +102,8 @@
   [webView loadRequest:request];
 }
 
-- (void)applicationWillFinishLaunching:(NSNotification*)notification {
-  NSApplication* application = [NSApplication sharedApplication];
-  NSString* title = NSProcessInfo.processInfo.processName;
-  application.mainMenu = [self newMainMenu:title];
-  window.title = title;
-  // [window cascadeTopLeftFromPoint:NSMakePoint(20, 20)];
-  [window makeKeyAndOrderFront:self];
-
-  [self performSelector:@selector(loadJupyterPage) withObject:nil afterDelay:loadDelay];
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// WKNavigationDelegate
 
 - (void)webView:(WKWebView*)webView didFailNavigation:(WKNavigation*)navigation withError:(NSError*)error {
   NSLog(@"Navigation %@ failed: %@", navigation, error.localizedDescription);
@@ -164,6 +156,23 @@
       break;
     }
   }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// WKUIDelegate
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// NSApplicationDelegate
+
+- (void)applicationWillFinishLaunching:(NSNotification*)notification {
+  NSApplication* application = [NSApplication sharedApplication];
+  NSString* title = NSProcessInfo.processInfo.processName;
+  application.mainMenu = [self newMainMenu:title];
+  window.title = title;
+  // [window cascadeTopLeftFromPoint:NSMakePoint(20, 20)];
+  [window makeKeyAndOrderFront:self];
+
+  [self performSelector:@selector(loadJupyterPage) withObject:nil afterDelay:loadDelay];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender {
@@ -222,6 +231,9 @@
 }
 
 @end
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// main
 
 int main(int argc, char* argv[]) {
   @autoreleasepool {
