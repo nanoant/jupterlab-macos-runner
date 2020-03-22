@@ -8,7 +8,7 @@
 #include <string.h>
 #include <sys/socket.h>
 
-@interface AppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate> {
+@interface AppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate> {
   NSWindow* window;
   WKWebView* webView;
   WKWebViewConfiguration* configuration;
@@ -48,6 +48,7 @@
     contentController = configuration.userContentController;
     webView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 0, 0) configuration:configuration];
     webView.navigationDelegate = self;
+    webView.UIDelegate = self;
     window.contentView = webView;
 
     NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
@@ -251,6 +252,35 @@
       break;
     }
   }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// WKUIDelegate
+
+- (void)webView:(WKWebView*)webView
+    runJavaScriptAlertPanelWithMessage:(NSString*)message
+                      initiatedByFrame:(WKFrameInfo*)frame
+                     completionHandler:(void (^)(void))completionHandler {
+  NSAlert* alert = [[NSAlert alloc] init];
+  alert.messageText = message;
+  [alert beginSheetModalForWindow:window
+                completionHandler:^(NSModalResponse returnCode) {
+                  completionHandler();
+                }];
+}
+
+- (void)webView:(WKWebView*)webView
+    runJavaScriptConfirmPanelWithMessage:(NSString*)message
+                        initiatedByFrame:(WKFrameInfo*)frame
+                       completionHandler:(void (^)(BOOL))completionHandler {
+  NSAlert* alert = [[NSAlert alloc] init];
+  alert.messageText = message;
+  [alert addButtonWithTitle:@"OK"];
+  [alert addButtonWithTitle:@"Cancel"];
+  [alert beginSheetModalForWindow:window
+                completionHandler:^(NSModalResponse returnCode) {
+                  completionHandler(returnCode == NSAlertFirstButtonReturn);
+                }];
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
