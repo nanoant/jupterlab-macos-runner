@@ -98,6 +98,38 @@
                 }];
 }
 
+- (void)injectCustomCSS {
+  NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+  NSString* cssPath = [defaults stringForKey:@"InjectCSSPath"];
+  NSFileManager* fileManager = [NSFileManager defaultManager];
+
+  if (cssPath.length == 0) {
+    return;
+  }
+
+  if (![fileManager fileExistsAtPath:cssPath]) {
+    [self alertAndQuitWithMessage:@"CSS file does not exist"
+                  informativeText:[NSString stringWithFormat:@"Check if %@ exists or adjust InjectCSSPath setting.",
+                                                             cssPath, nil]];
+    return;
+  }
+
+  NSData* data = [NSData dataWithContentsOfFile:cssPath];
+  // http://iosdevelopertips.com/core-services/encode-decode-using-base64.html
+  NSString* source = [NSString stringWithFormat:@"javascript:(function() {"
+                                                @"var parent = document.getElementsByTagName('head').item(0);"
+                                                @"var style = document.createElement('style');"
+                                                @"style.type = 'text/css';"
+                                                @"style.innerHTML = window.atob('%@');"
+                                                @"parent.appendChild(style)})();",
+                                                [data base64EncodedStringWithOptions:0], nil];
+  WKUserScript* script = [[WKUserScript alloc] initWithSource:source
+                                                injectionTime:WKUserScriptInjectionTimeAtDocumentEnd
+                                             forMainFrameOnly:YES];
+  NSLog(@"Injecting: %@", cssPath);
+  [webView.configuration.userContentController addUserScript:script];
+}
+
 - (NSTask*)newJupyterCommandTask {
   NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
 
@@ -295,6 +327,7 @@
   [window makeKeyAndOrderFront:self];
 
   if ((jupyterTask = [self newJupyterCommandTask])) {
+    [self injectCustomCSS];
     [self performSelector:@selector(loadJupyterPage) withObject:nil afterDelay:loadDelay];
   }
 }
