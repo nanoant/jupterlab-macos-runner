@@ -9,7 +9,7 @@ It was created to make JupyterLab work more convenient on *macOS*, without the n
 
 NOTE: At the moment it does not detect if there are some unsaved notebooks upon application quit.
 
-<img src="Screenshot.png" width="640" height="436" alt="Screenshot">
+<img src="Screenshot.png" width="700" height="503" alt="Screenshot">
 
 ### Configuration
 
