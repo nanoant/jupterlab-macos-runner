@@ -4,6 +4,8 @@
 #import <WebKit/WebKit.h>
 
 #include <arpa/inet.h>
+#include <errno.h>
+#include <string.h>
 #include <sys/socket.h>
 
 @interface AppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate> {
@@ -35,11 +37,6 @@
 
 - (id)init {
   if (self = [super init]) {
-    jupyterTask = [self newJupyterCommandTask];
-    if (!jupyterTask) {
-      [[NSApplication sharedApplication] terminate:self];
-      return self;
-    }
     window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 640, 480)
                                          styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
                                                    NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable
@@ -52,6 +49,13 @@
     webView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 0, 0) configuration:configuration];
     webView.navigationDelegate = self;
     window.contentView = webView;
+
+    NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+    host = [defaults stringForKey:@"Host"] ?: @"127.0.0.1";
+    port = [defaults integerForKey:@"Port"] ?: [self availablePort];
+    token = [defaults stringForKey:@"Token"] ?: @"deadbeefb00b";
+    loadDelay = [defaults doubleForKey:@"LoadDelay"] ?: 0.5;
+    loadAttempts = [defaults integerForKey:@"LoadAttempts"] ?: 5;
   }
   return self;
 }
@@ -64,16 +68,16 @@
   inet_aton("0.0.0.0", &addr.sin_addr);
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   if (sock < 0) {
-    NSLog(@"Fatal error: socket(...) failed");
+    NSLog(@"Fatal error: socket(...) failed %d: %s", errno, strerror(errno));
     return 0;
   }
   if (bind(sock, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
-    NSLog(@"Fatal error: bind(...) failed");
+    NSLog(@"Fatal error: bind(...) failed %d: %s", errno, strerror(errno));
     close(sock);
     return 0;
   }
   if (getsockname(sock, (struct sockaddr*)&addr, &len) != 0) {
-    NSLog(@"Fatal error: getsockname(...) failed");
+    NSLog(@"Fatal error: getsockname(...) failed %d: %s", errno, strerror(errno));
     close(sock);
     return 0;
   }
@@ -82,25 +86,48 @@
   return addr.sin_port;
 }
 
+- (void)alertAndQuitWithMessage:(NSString*)message informativeText:(NSString*)informativeText {
+  NSAlert* alert = [[NSAlert alloc] init];
+  alert.messageText = message;
+  alert.informativeText = informativeText;
+  [alert addButtonWithTitle:@"Quit"];
+  [alert beginSheetModalForWindow:window
+                completionHandler:^(NSModalResponse returnCode) {
+                  [window close];
+                }];
+}
+
 - (NSTask*)newJupyterCommandTask {
   NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
 
-  NSString* commandPath = [defaults stringForKey:@"CommandPath"] ?: @"jupyter-lab";
-  NSString* notebookPath = [defaults stringForKey:@"NotebookPath"] ?: @"~/Documents/Notebooks";
+  NSString* commandPath =
+      [defaults stringForKey:@"CommandPath"] ?: [@"~/miniconda3/bin/jupyter-lab" stringByExpandingTildeInPath];
+  NSString* notebookPath =
+      [defaults stringForKey:@"NotebookPath"] ?: [@"~/Documents/Notebooks" stringByExpandingTildeInPath];
 
-  host = [defaults stringForKey:@"Host"] ?: @"127.0.0.1";
-  port = [defaults integerForKey:@"Port"] ?: [self availablePort];
-  token = [defaults stringForKey:@"Token"] ?: @"deadbeefb00b";
-  loadDelay = [defaults doubleForKey:@"LoadDelay"] ?: 0.5;
-  loadAttempts = [defaults integerForKey:@"LoadAttempts"] ?: 5;
+  NSFileManager* fileManager = [NSFileManager defaultManager];
+
+  if (![fileManager fileExistsAtPath:commandPath]) {
+    [self alertAndQuitWithMessage:@"jupter-lab command does not exist"
+                  informativeText:[NSString stringWithFormat:@"Check if %@ exists or adjust CommandPath setting.",
+                                                             commandPath, nil]];
+    return nil;
+  }
+  BOOL isDirectory;
+  if (![fileManager fileExistsAtPath:notebookPath isDirectory:&isDirectory]) {
+    [self alertAndQuitWithMessage:@"Notebook directory does not exist"
+                  informativeText:[NSString stringWithFormat:@"Check %@ directory or adjust NotebookPath setting.",
+                                                             notebookPath, nil]];
+    return nil;
+  } else if (!isDirectory) {
+    [self alertAndQuitWithMessage:@"Notebook directory is not a proper directory"
+                  informativeText:[NSString stringWithFormat:@"Check %@ directory or adjust NotebookPath setting.",
+                                                             notebookPath, nil]];
+    return nil;
+  }
 
   if (port <= 0) {
-    NSAlert* alert = [[NSAlert alloc] init];
-    alert.messageText = [NSString stringWithFormat:@"Not free port found. Adjust Port setting.", nil];
-    [alert beginSheetModalForWindow:window
-                  completionHandler:^(NSModalResponse returnCode) {
-                    [window close];
-                  }];
+    [self alertAndQuitWithMessage:@"No free port found." informativeText:@"Adjust Port setting."];
     return nil;
   }
 
@@ -121,24 +148,16 @@
     // return task;
     [task launch];
   } @catch (NSException* exception) {
-    NSAlert* alert = [[NSAlert alloc] init];
-    alert.messageText = [NSString stringWithFormat:@"Cannot run command `%@': %@\nAdjust CommandPath setting.",
-                                                   commandPath, exception.reason, nil];
-    [alert beginSheetModalForWindow:window
-                  completionHandler:^(NSModalResponse returnCode) {
-                    [window close];
-                  }];
+    [self alertAndQuitWithMessage:@"Cannot run jupter-lab command"
+                  informativeText:[NSString stringWithFormat:@"Check if %@ exists or adjust CommandPath setting.\n%@",
+                                                             commandPath, exception.reason, nil]];
     return nil;
   }
 
   if (!task.isRunning) {
-    NSAlert* alert = [[NSAlert alloc] init];
-    alert.messageText =
-        [NSString stringWithFormat:@"Command `%@' is not running. Adjust CommandPath setting.", commandPath, nil];
-    [alert beginSheetModalForWindow:window
-                  completionHandler:^(NSModalResponse returnCode) {
-                    [window close];
-                  }];
+    [self alertAndQuitWithMessage:@"jupter-lab is not running"
+                  informativeText:[NSString stringWithFormat:@"Check if %@ exists or adjust CommandPath setting.",
+                                                             commandPath, nil]];
     return nil;
   }
 
@@ -235,9 +254,6 @@
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// WKUIDelegate
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // NSApplicationDelegate
 
 - (void)applicationWillFinishLaunching:(NSNotification*)notification {
@@ -248,7 +264,9 @@
   // [window cascadeTopLeftFromPoint:NSMakePoint(20, 20)];
   [window makeKeyAndOrderFront:self];
 
-  [self performSelector:@selector(loadJupyterPage) withObject:nil afterDelay:loadDelay];
+  if ((jupyterTask = [self newJupyterCommandTask])) {
+    [self performSelector:@selector(loadJupyterPage) withObject:nil afterDelay:loadDelay];
+  }
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender {
@@ -259,8 +277,10 @@
   // NOTE: [jupyterTask terminate]; is not reliable with conjunction with
   // [(NSConcreteTask*)task setStartsNewProcessGroup:NO];
   // Using POSIX way instead
-  kill(jupyterTask.processIdentifier, SIGTERM);
-  [jupyterTask waitUntilExit];
+  if (jupyterTask) {
+    kill(jupyterTask.processIdentifier, SIGTERM);
+    [jupyterTask waitUntilExit];
+  }
 }
 
 - (NSMenu*)newMainMenu:(NSString*)title {
