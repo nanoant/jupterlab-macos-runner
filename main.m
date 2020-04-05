@@ -61,6 +61,9 @@
   return self;
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Utilities
+
 // https://gist.github.com/kimar/5916647
 - (int)availablePort {
   struct sockaddr_in addr;
@@ -204,6 +207,29 @@
   [webView loadRequest:request];
 }
 
+- (void)download:(NSURLRequest*)request {
+  NSSavePanel* savePanel = [NSSavePanel new];
+  savePanel.parentWindow = window;
+  savePanel.canCreateDirectories = YES;
+  savePanel.nameFieldStringValue = request.URL.lastPathComponent;
+  [savePanel beginSheetModalForWindow:window
+                    completionHandler:^(NSModalResponse result) {
+                      switch (result) {
+                      case NSModalResponseOK:
+                        [[[NSURLSession sharedSession]
+                            dataTaskWithRequest:request
+                              completionHandler:^(NSData* data, NSURLResponse* response, NSError* error) {
+                                if (data && !error) {
+                                  [data writeToURL:savePanel.URL atomically:NO];
+                                }
+                              }] resume];
+                        break;
+                      default:
+                        break;
+                      }
+                    }];
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // WKNavigationDelegate
 
@@ -270,7 +296,13 @@
   NSURL* url = navigationAction.request.URL;
   bool isLocal = [url.scheme isEqualToString:@"http"] && [url.host isEqualToString:host] && url.port.intValue == port;
   if (isLocal || [url.scheme isEqualToString:@"https"]) {
-    decisionHandler(WKNavigationActionPolicyAllow);
+    if (navigationAction.navigationType == WKNavigationTypeLinkActivated && [url.relativePath hasPrefix:@"/files/"]) {
+      NSLog(@"Will download instead for action %ld to: %@", navigationAction.navigationType, url);
+      [self download:navigationAction.request];
+      decisionHandler(WKNavigationActionPolicyCancel);
+    } else {
+      decisionHandler(WKNavigationActionPolicyAllow);
+    }
   } else {
     switch (navigationAction.navigationType) {
     case WKNavigationTypeLinkActivated:
